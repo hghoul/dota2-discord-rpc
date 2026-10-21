@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Dota2RPC/Dota2RPC.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Dota2RPC.Tests/Dota2RPC.Tests.csproj" />
+  </Folder>
+</Solution>

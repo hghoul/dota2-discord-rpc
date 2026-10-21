@@ -1,0 +1,60 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>Dota2RPC</AssemblyName>
+    <RootNamespace>Dota2RPC</RootNamespace>
+    <ApplicationIcon>Resources\app.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <ApplicationVisualStyles>true</ApplicationVisualStyles>
+    <ApplicationDefaultFont>Segoe UI, 9.75pt</ApplicationDefaultFont>
+    <Version>1.0.0</Version>
+    <FileVersion>1.0.0.0</FileVersion>
+    <Product>Dota 2 Discord Rich Presence</Product>
+    <Description>Dota 2 Discord Rich Presence</Description>
+    <Company>Dota2RPC</Company>
+    <Copyright>Dota2RPC</Copyright>
+    <NeutralLanguage>ru-RU</NeutralLanguage>
+    <SatelliteResourceLanguages>ru</SatelliteResourceLanguages>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>false</SelfContained>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <!-- Программа в трее: без фонового (concurrent) сборщика мусора — меньше потоков и памяти. -->
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <TieredPGO>false</TieredPGO>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\heroes.json" LogicalName="Dota2RPC.heroes.json" />
+    <EmbeddedResource Include="Resources\app.ico" LogicalName="Dota2RPC.app.ico" />
+  </ItemGroup>
+
+  <!-- Application ID Discord, общий для всех пользователей: берётся из discord-app-id.txt в корне
+       репозитория (или из -p:DiscordClientId=...) и вшивается в программу. -->
+  <PropertyGroup>
+    <DiscordAppIdFile>$(MSBuildThisFileDirectory)..\..\discord-app-id.txt</DiscordAppIdFile>
+    <DiscordClientId Condition="'$(DiscordClientId)' == '' and Exists('$(DiscordAppIdFile)')">$([System.IO.File]::ReadAllText('$(DiscordAppIdFile)').Trim())</DiscordClientId>
+  </PropertyGroup>
+
+  <!-- Адрес анимированных иконок героев (репозиторий GitHub через jsDelivr): hero-animations-url.txt. -->
+  <PropertyGroup>
+    <HeroAnimationsUrlFile>$(MSBuildThisFileDirectory)..\..\hero-animations-url.txt</HeroAnimationsUrlFile>
+    <HeroAnimationsBaseUrl Condition="'$(HeroAnimationsBaseUrl)' == '' and Exists('$(HeroAnimationsUrlFile)')">$([System.IO.File]::ReadAllText('$(HeroAnimationsUrlFile)').Trim())</HeroAnimationsBaseUrl>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AssemblyMetadata Include="HeroAnimationsBaseUrl" Value="$(HeroAnimationsBaseUrl)" />
+    <AssemblyMetadata Include="DiscordClientId" Value="$(DiscordClientId)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Dota2RPC.Tests" />
+  </ItemGroup>
+
+</Project>
