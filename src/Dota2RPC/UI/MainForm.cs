@@ -26,7 +26,15 @@ internal sealed class MainForm : Form
 
     // Элементы, которые видны только в режиме разработчика.
     readonly List<Control> _devOnly = [];
-    ToggleSwitch _tDev = null!;
+    ToggleSwitch _tDev = null!, _tRecord = null!;
+
+    // Обновления
+    Card _updateBanner = null!;
+    Label _updateBannerText = null!;
+    FlatButton _updateNow = null!;
+    ToggleSwitch _tUpdates = null!;
+    Label _updateStatus = null!;
+    bool _updating;
 
     // «Настройки»
     TextBox _clientId = null!;
@@ -303,12 +311,33 @@ internal sealed class MainForm : Form
         preview.Add(Ui.ButtonRow(_testButton, portal));
         _testResult = preview.Add(Ui.Muted("«Тест RPC» на 20 секунд показывает проверочный статус — даже если Dota 2 не запущена."));
 
+        _updateBanner = new Card("Доступна новая версия");
+        _updateBannerText = _updateBanner.Add(Ui.Value(""));
+        _updateNow = new FlatButton("Обновить сейчас", ButtonKind.Primary);
+        _updateNow.Click += async (_, _) => await InstallUpdateAsync();
+        var notes = new FlatButton("Что нового");
+        notes.Click += (_, _) =>
+        {
+            if (_app.AvailableUpdate is { } u) Ui.OpenUrl(u.PageUrl);
+        };
+        var skip = new FlatButton("Пропустить эту версию");
+        skip.Click += (_, _) =>
+        {
+            if (_app.AvailableUpdate is { } u) ApplySetting(s => s.SkippedUpdateVersion = u.Version.ToString());
+            RefreshUpdateUi();
+        };
+        _updateBanner.Add(Ui.ButtonRow(_updateNow, notes, skip));
+        _updateBanner.Visible = false;
+        _updateBanner.Dock = DockStyle.Fill; // на всю ширину страницы, над обеими колонками
+        page.Controls.Add(_updateBanner, 0, 0);
+        page.SetColumnSpan(_updateBanner, 2);
+
         var left = Column(connections);
         var right = Column(preview, match);
         left.Margin = new Padding(0, 0, 10, 0);
         right.Margin = new Padding(10, 0, 0, 0);
-        page.Controls.Add(left, 0, 0);
-        page.Controls.Add(right, 1, 0);
+        page.Controls.Add(left, 0, 1);
+        page.Controls.Add(right, 1, 1);
         return page;
     }
 
@@ -441,7 +470,19 @@ internal sealed class MainForm : Form
             ApplyDeveloperMode(_tDev.Checked);
         };
 
-        page.Controls.Add(Column(discord, startup, display, developer), 0, 0);
+        var updates = new Card("Обновления");
+        _tUpdates = new ToggleSwitch();
+        updates.Add(Ui.ToggleRow("Проверять обновления",
+            "Раз в 12 часов программа смотрит последний релиз на GitHub и напоминает о новой версии. Обновление ставится только по вашей кнопке.", _tUpdates));
+        _tUpdates.CheckedChanged += (_, _) => ApplySetting(s => s.CheckUpdates = _tUpdates.Checked);
+        _updateStatus = updates.Add(Ui.Muted($"Установлена версия {AppInfo.Version}."));
+        var checkNow = new FlatButton("Проверить сейчас");
+        checkNow.Click += async (_, _) => await CheckUpdatesNowAsync(checkNow);
+        var releases = new FlatButton("Все версии на GitHub");
+        releases.Click += (_, _) => Ui.OpenUrl($"https://github.com/{UpdateChecker.Repository}/releases");
+        updates.Add(Ui.ButtonRow(checkNow, releases));
+
+        page.Controls.Add(Column(discord, startup, display, updates, developer), 0, 0);
         return page;
     }
 
@@ -461,6 +502,8 @@ internal sealed class MainForm : Form
         _tEmoji.SetSilently(s.ShowEmoji);
         _tAnim.SetSilently(s.AnimatedHeroIcons);
         _tDev.SetSilently(s.DeveloperMode);
+        _tUpdates.SetSilently(s.CheckUpdates);
+        _tRecord.SetSilently(s.RecordGsiSamples);
         ApplyDeveloperMode(s.DeveloperMode);
         _port.Value = Math.Clamp(s.GsiPort, (int)_port.Minimum, (int)_port.Maximum);
     }
@@ -650,6 +693,13 @@ internal sealed class MainForm : Form
         var repair = new FlatButton("Повторная настройка");
         repair.Click += async (_, _) => await RepairAsync();
         diag.Add(Ui.ButtonRow(repair, logs));
+        _tRecord = new ToggleSwitch();
+        Dev(diag.Add(Ui.ToggleRow("Записывать образцы пакетов GSI",
+            "По одному JSON на каждый этап/карту в папку gsi-samples (только на этом компьютере). Нужно для отладки новых режимов игры.", _tRecord)));
+        _tRecord.CheckedChanged += (_, _) => ApplySetting(s => s.RecordGsiSamples = _tRecord.Checked);
+        var samples = Dev(new FlatButton("Открыть образцы GSI"));
+        samples.Click += (_, _) => Ui.OpenFolder(GsiRecorder.Folder);
+        diag.Add(Ui.ButtonRow(samples));
 
         page.Controls.Add(Column(dota, gsi, launch, diag), 0, 0);
         return page;
@@ -736,8 +786,67 @@ internal sealed class MainForm : Form
         }, TaskScheduler.FromCurrentSynchronizationContext());
     }
 
+    void RefreshUpdateUi()
+    {
+        var update = _app.AvailableUpdate;
+        var skipped = update is not null && _app.Settings.SkippedUpdateVersion == update.Version.ToString();
+        var show = update is not null && !skipped;
+        if (_updateBanner.Visible != show) _updateBanner.Visible = show;
+        if (show && !_updating)
+            _updateBannerText.Text = $"Версия {update!.Version} — у вас {AppInfo.Version}. «Обновить сейчас» скачает установщик с GitHub, проверит его и обновит программу; настройки сохранятся.";
+        if (_updating) return;
+        var checkedAt = _app.LastUpdateCheckUtc is { } t ? $" Последняя проверка: {t.ToLocalTime():dd.MM HH:mm}." : "";
+        _updateStatus.Text = update is not null
+            ? $"Установлена версия {AppInfo.Version}. Доступна {update.Version}{(skipped ? " (пропущена)" : "")}.{checkedAt}"
+            : $"Установлена версия {AppInfo.Version}{(_app.LastUpdateCheckUtc is null ? "." : " — это последняя версия.")}{checkedAt}";
+    }
+
+    async Task CheckUpdatesNowAsync(FlatButton button)
+    {
+        button.Enabled = false;
+        _updateStatus.Text = "Проверка обновлений…";
+        try
+        {
+            var update = await _app.CheckForUpdatesAsync(manual: true);
+            if (update is not null && _app.Settings.SkippedUpdateVersion == update.Version.ToString())
+                ApplySetting(s => s.SkippedUpdateVersion = null); // ручная проверка снова показывает пропущенную версию
+            RefreshUpdateUi();
+            if (update is not null) SelectPage(0);
+        }
+        catch (Exception ex)
+        {
+            _updateStatus.Text = "Не удалось проверить обновления: " + ex.Message;
+        }
+        finally
+        {
+            button.Enabled = true;
+        }
+    }
+
+    async Task InstallUpdateAsync()
+    {
+        if (_app.AvailableUpdate is not { } update || _updating) return;
+        _updating = true;
+        _updateNow.Enabled = false;
+        try
+        {
+            var progress = new Progress<int>(p => _updateBannerText.Text = $"Загрузка версии {update.Version}… {p}%");
+            var setup = await UpdateChecker.DownloadAsync(update, progress);
+            _updateBannerText.Text = "Установка… Программа перезапустится сама.";
+            UpdateChecker.RunInstaller(setup); // установщик корректно закроет эту программу (--exit)
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Обновление не удалось", ex);
+            _updating = false;
+            _updateNow.Enabled = true;
+            _updateBannerText.Text = "Не удалось обновиться: " + ex.Message;
+        }
+    }
+
     void RefreshStatus()
     {
+        RefreshUpdateUi();
         if (IsDisposed) return;
         StartIntegrationCheck();
         var st = _app.GetStatus();
@@ -874,6 +983,7 @@ internal sealed class MainForm : Form
     static string StageName(GsiSnapshot s)
     {
         if (s.IsSpectating) return "Наблюдение за матчем";
+        if (s.IsHeroDemo) return "Проба героя";
         if (!s.InMatch) return "Главное меню";
         return s.ShortGameState switch
         {

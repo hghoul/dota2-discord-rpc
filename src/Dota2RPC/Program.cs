@@ -46,7 +46,7 @@ internal static class Program
 
             var showWindow = !background && !watch;
             var page = cli.Get("page") switch { "settings" => 1, "integration" => 2, _ => 0 };
-            using var tray = new TrayApp(controller, instance, showWindow, watchMode: watch, initialPage: page);
+            using var tray = new TrayApp(controller, instance, showWindow, watchMode: watch, initialPage: page, justUpdated: cli.Has("updated"));
             Application.Run(tray);
             return 0;
         }

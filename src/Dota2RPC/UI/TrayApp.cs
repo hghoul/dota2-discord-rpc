@@ -45,7 +45,10 @@ internal sealed class TrayApp : ApplicationContext
     bool _watchMode;
     bool _exiting;
 
-    public TrayApp(AppController app, SingleInstance instance, bool showWindow, bool watchMode, int initialPage = 0)
+    ToolStripMenuItem _updateItem = null!;
+    UpdateInfo? _notifiedUpdate;
+
+    public TrayApp(AppController app, SingleInstance instance, bool showWindow, bool watchMode, int initialPage = 0, bool justUpdated = false)
     {
         _app = app;
         _instance = instance;
@@ -59,6 +62,8 @@ internal sealed class TrayApp : ApplicationContext
         menu.Items.Add("Открыть окно", null, (_, _) => ShowWindow(0));
         menu.Items.Add("Настройки", null, (_, _) => ShowWindow(1));
         menu.Items.Add("Тест RPC", null, async (_, _) => await TestFromTrayAsync());
+        _updateItem = new ToolStripMenuItem("Обновить", null, (_, _) => ShowWindow(0)) { Visible = false, Font = Theme.Font(9.75f, FontStyle.Bold) };
+        menu.Items.Add(_updateItem);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Выход", null, (_, _) => ExitApp());
 
@@ -76,6 +81,11 @@ internal sealed class TrayApp : ApplicationContext
 
         _app.DotaRunningChanged += _ => _ui.Post(_ => UpdateTray(), null);
         _app.StatusChanged += () => _ui.Post(_ => UpdateTray(), null);
+        _app.UpdateAvailable += update => _ui.Post(_ => OnUpdateAvailable(update), null);
+        _tray.BalloonTipClicked += (_, _) =>
+        {
+            if (_notifiedUpdate is not null) ShowWindow(0);
+        };
         _instance.Listen(
             onShow: () => _ui.Post(_ => ShowWindow(0), null),
             onExit: () => _ui.Post(_ => ExitApp(), null));
@@ -88,6 +98,24 @@ internal sealed class TrayApp : ApplicationContext
 
         UpdateTray();
         if (showWindow) ShowWindow(initialPage);
+        if (justUpdated)
+        {
+            _tray.Visible = true;
+            _tray.ShowBalloonTip(5000, "Dota 2 RPC обновлена", $"Установлена версия {AppInfo.Version}.", ToolTipIcon.Info);
+        }
+    }
+
+    void OnUpdateAvailable(UpdateInfo update)
+    {
+        if (_exiting) return;
+        _updateItem.Text = $"Обновить до {update.Version}";
+        _updateItem.Visible = true;
+        if (_notifiedUpdate?.Version == update.Version) return; // напоминаем один раз за запуск
+        _notifiedUpdate = update;
+        _tray.Visible = true;
+        _tray.ShowBalloonTip(8000, $"Доступна версия {update.Version}",
+            "Нажмите, чтобы открыть программу и обновиться (займёт меньше минуты).", ToolTipIcon.Info);
+        UpdateTray();
     }
 
     void OnSessionEnding(object? sender, Microsoft.Win32.SessionEndingEventArgs e)

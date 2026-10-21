@@ -64,6 +64,7 @@ internal sealed class PresenceBuilder(HeroCatalog heroes)
         // не сдвигается между пакетами и Discord не получает лишних обновлений.
         var at = new DateTimeOffset(s.ReceivedUtc).ToUnixTimeSeconds();
         if (s.IsSpectating) return BuildSpectating(s, at, input.Settings);
+        if (s.IsHeroDemo) return BuildHeroDemo(s, input.Settings);
 
         var state = s.ShortGameState ?? "";
         return state switch
@@ -182,6 +183,27 @@ internal sealed class PresenceBuilder(HeroCatalog heroes)
             SmallImage = heroName is not null ? AppInfo.DotaLogoUrl : null,
             SmallText = heroName is not null ? SmallText(s) : null,
             Buttons = ProfileButtons(s, o),
+        };
+    }
+
+    PresenceActivity BuildHeroDemo(GsiSnapshot s, AppSettings o)
+    {
+        var heroName = s.HasHero ? heroes.DisplayName(s.HeroName!) : null;
+        string? state = null;
+        if (heroName is not null)
+        {
+            state = heroName;
+            if (o.ShowLevel && s.HeroLevel is > 0) state += " · " + Ico(o, "⭐", $"Ур. {s.HeroLevel}");
+        }
+
+        return new PresenceActivity
+        {
+            Details = Ico(o, "🧪", "Пробует героя"),
+            State = state,
+            LargeImage = heroName is not null ? heroes.ImageUrl(s.HeroName!, o.AnimatedHeroIcons) : AppInfo.DotaLogoUrl,
+            LargeText = heroName is null ? "Демо героя" : $"{heroName} · демо героя",
+            SmallImage = heroName is not null ? AppInfo.DotaLogoUrl : null,
+            SmallText = heroName is not null ? "Dota 2 · демо героя" : null,
         };
     }
 

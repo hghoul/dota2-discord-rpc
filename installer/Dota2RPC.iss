@@ -74,6 +74,8 @@ Name: "{autodesktop}\{#AppShortName}"; Filename: "{app}\{#AppExe}"; Tasks: deskt
 [Run]
 Filename: "{app}\{#AppExe}"; Parameters: "--setup --client-id={code:GetClientId} --autostart={code:AutostartFlag} --with-dota={code:WithDotaFlag} --gsi=1 --launch-option={code:LaunchOptionFlag}{code:QuietFlag}"; StatusMsg: "Настройка интеграции с Dota 2 и Discord..."; Flags: waituntilterminated
 Filename: "{app}\{#AppExe}"; Description: "Запустить {#AppShortName}"; Flags: postinstall nowait skipifsilent
+; Обновление из самой программы (/UPDATE=1): установщик тихий, поэтому новую версию запускаем сами
+Filename: "{app}\{#AppExe}"; Parameters: "--background --updated"; Flags: nowait; Check: IsSelfUpdate
 
 [UninstallRun]
 Filename: "{app}\{#AppExe}"; Parameters: "--uninstall"; RunOnceId: "Dota2RPCCleanup"; Flags: waituntilterminated runhidden
@@ -193,6 +195,11 @@ end;
 function LaunchOptionFlag(Param: String): String;
 begin
   if WizardIsTaskSelected('launchoption') then Result := '1' else Result := '0';
+end;
+
+function IsSelfUpdate(): Boolean;
+begin
+  Result := ExpandConstant('{param:UPDATE|0}') = '1';
 end;
 
 function QuietFlag(Param: String): String;

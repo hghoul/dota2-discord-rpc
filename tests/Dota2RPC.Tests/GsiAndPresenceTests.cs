@@ -196,6 +196,27 @@ public class GsiAndPresenceTests
         Assert.Equal("🏆 Победа · матч завершён", Build(Parse(json.ToJsonString()), colorful)!.Details);
     }
 
+    [Theory]
+    [InlineData("hero_demo_main", "")] // так игра присылает пробу героя (проверено на реальных данных)
+    [InlineData("start", "hero_demo")]
+    public void Hero_demo_is_shown_as_hero_trial(string map, string customGame)
+    {
+        var json = JsonNode.Parse(TestEnv.Fixture("ingame.json"))!.AsObject();
+        json["map"]!["name"] = map;
+        json["map"]!["customgamename"] = customGame;
+        json["hero"]!["level"] = 6;
+        var s = Parse(json.ToJsonString());
+        Assert.True(s.IsHeroDemo);
+
+        var a = Build(s)!;
+        Assert.Equal("Пробует героя", a.Details);
+        Assert.Equal("Pudge · Ур. 6", a.State);
+        Assert.Null(a.StartUnix); // в демо нет настоящего матча — ни таймера, ни K/D/A
+
+        var colorful = Build(s, TestEnv.Settings(o => o.ShowEmoji = true))!;
+        Assert.Equal("🧪 Пробует героя", colorful.Details);
+    }
+
     [Fact]
     public void Activity_json_matches_discord_limits()
     {

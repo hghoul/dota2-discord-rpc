@@ -32,8 +32,17 @@ internal sealed class AppSettings
 
     public bool TrayHintShown { get; set; }
 
+    /// <summary>Проверять наличие новой версии на GitHub (раз в 12 часов) и напоминать о ней.</summary>
+    public bool CheckUpdates { get; set; } = true;
+
+    /// <summary>Версия, о которой пользователь попросил больше не напоминать.</summary>
+    public string? SkippedUpdateVersion { get; set; }
+
     /// <summary>Показывать технические настройки (Application ID, порт GSI, диагностика).</summary>
     public bool DeveloperMode { get; set; }
+
+    /// <summary>Сохранять образцы пакетов GSI на диск (переключатель — в режиме разработчика, для отладки).</summary>
+    public bool RecordGsiSamples { get; set; }
 
     static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 

@@ -63,6 +63,17 @@ internal sealed class GsiSnapshot
 
     public bool InMatch => HasMap && !string.IsNullOrEmpty(GameState);
 
+    /// <summary>Исходный JSON пакета (для записи образцов в режиме разработчика).</summary>
+    public string? RawJson { get; init; }
+
+    /// <summary>
+    /// Проба героя (Demo Hero): локальная игра на карте hero_demo. Признак берётся из имени карты
+    /// или пользовательской игры — так её запускает клиент Dota 2.
+    /// </summary>
+    public bool IsHeroDemo =>
+        (MapName?.Contains("hero_demo", StringComparison.OrdinalIgnoreCase) ?? false) ||
+        (CustomGameName?.Contains("hero_demo", StringComparison.OrdinalIgnoreCase) ?? false);
+
     /// <summary>32-битный Steam Account ID (для ссылок на профили), если его можно получить из данных игры.</summary>
     public string? AccountId32
     {
@@ -98,6 +109,7 @@ internal static class GsiParser
         return new GsiSnapshot
         {
             ReceivedUtc = receivedUtc,
+            RawJson = json,
             HasAuth = auth is not null,
             AuthToken = Str(auth, "token"),
             ProviderTimestamp = Long(provider, "timestamp"),

@@ -14,8 +14,8 @@
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <ApplicationVisualStyles>true</ApplicationVisualStyles>
     <ApplicationDefaultFont>Segoe UI, 9.75pt</ApplicationDefaultFont>
-    <Version>1.0.0</Version>
-    <FileVersion>1.0.0.0</FileVersion>
+    <Version>1.1.0</Version>
+    <FileVersion>1.1.0.0</FileVersion>
     <Product>Dota 2 Discord Rich Presence</Product>
     <Description>Dota 2 Discord Rich Presence</Description>
     <Company>Dota2RPC</Company>

@@ -78,6 +78,9 @@ internal sealed class AppController : IDisposable
         _dota.Start();
         _discord.SetActive(_dota.IsRunning);
         _tick = new System.Threading.Timer(_ => Recompute(), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(5));
+        // Первая проверка обновлений — через 20 с после запуска, дальше раз в 12 часов.
+        _updateTimer = new System.Threading.Timer(_ => _ = CheckForUpdatesAsync(manual: false), null,
+            TimeSpan.FromSeconds(20), TimeSpan.FromHours(12));
         Recompute();
     }
 
@@ -133,6 +136,8 @@ internal sealed class AppController : IDisposable
             _packets++;
             TrackMatch(snapshot);
         }
+        var settings = Settings;
+        if (settings.RecordGsiSamples) GsiRecorder.Save(snapshot);
         Recompute();
     }
 
@@ -215,6 +220,52 @@ internal sealed class AppController : IDisposable
         }
     }
 
+    System.Threading.Timer? _updateTimer;
+    int _updateCheckRunning;
+
+    /// <summary>Найденная новая версия (или null).</summary>
+    public UpdateInfo? AvailableUpdate { get; private set; }
+
+    public DateTime? LastUpdateCheckUtc { get; private set; }
+
+    public string? LastUpdateError { get; private set; }
+
+    /// <summary>Новая версия найдена (и пользователь не просил её пропустить, если проверка автоматическая).</summary>
+    public event Action<UpdateInfo>? UpdateAvailable;
+
+    /// <returns>Новая версия или null, если её нет.</returns>
+    public async Task<UpdateInfo?> CheckForUpdatesAsync(bool manual)
+    {
+        var settings = Settings;
+        if (!manual && !settings.CheckUpdates) return null;
+        if (Interlocked.Exchange(ref _updateCheckRunning, 1) == 1) return AvailableUpdate;
+        try
+        {
+            var update = await UpdateChecker.CheckAsync().ConfigureAwait(false);
+            LastUpdateCheckUtc = DateTime.UtcNow;
+            LastUpdateError = null;
+            AvailableUpdate = update;
+            if (update is not null)
+            {
+                Log.Info($"Обновление: доступна версия {update.Version} (сейчас {UpdateChecker.CurrentVersion})");
+                if (manual || settings.SkippedUpdateVersion != update.Version.ToString()) UpdateAvailable?.Invoke(update);
+            }
+            StatusChanged?.Invoke();
+            return update;
+        }
+        catch (Exception ex)
+        {
+            LastUpdateError = ex.Message;
+            Log.Warn($"Обновление: не удалось проверить: {ex.Message}");
+            if (manual) throw;
+            return null;
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _updateCheckRunning, 0);
+        }
+    }
+
     public static PresenceActivity CreateTestActivity() => new()
     {
         Details = "🧪 Проверка Rich Presence",
@@ -234,6 +285,7 @@ internal sealed class AppController : IDisposable
         if (_disposed) return;
         _disposed = true;
         _tick?.Dispose();
+        _updateTimer?.Dispose();
         _dota.Dispose();
         _gsi.Dispose();
         _discord.Dispose(); // очищает статус в Discord
