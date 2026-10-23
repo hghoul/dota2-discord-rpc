@@ -61,11 +61,18 @@ internal sealed class Card : Panel
         e.Graphics.Clear(Parent?.BackColor ?? Theme.Background);
         Theme.HighQuality(e.Graphics);
         var r = new RectangleF(0.5f, 0.5f, Width - 1.5f, Height - 1.5f);
-        using var path = Theme.RoundRect(r, 10 * DeviceDpi / 96f);
+        var s = DeviceDpi / 96f;
+        using var path = Theme.RoundRect(r, 12 * s);
         using var fill = new SolidBrush(Theme.Card);
-        using var pen = new Pen(Theme.CardBorder, 1);
+        using var pen = new LinearGradientBrush(r, Color.FromArgb(70, 54, 82), Color.FromArgb(36, 29, 44), LinearGradientMode.Vertical);
+        using var border = new Pen(pen, 1);
         e.Graphics.FillPath(fill, path);
-        e.Graphics.DrawPath(pen, path);
+        e.Graphics.DrawPath(border, path);
+
+        // Короткая огненная полоса по верхнему краю, тающая вправо
+        var line = new RectangleF(14 * s, 0.5f, Math.Min(Width * 0.45f, 220 * s), 2.5f * s);
+        using var glow = new LinearGradientBrush(line, Theme.AccentA, Color.FromArgb(0, Theme.AccentB), LinearGradientMode.Horizontal);
+        e.Graphics.FillRectangle(glow, line);
     }
 }
 
@@ -78,6 +85,31 @@ internal sealed class ScrollPanel : Panel
     }
 
     protected override Point ScrollToControl(Control activeControl) => DisplayRectangle.Location;
+
+    /// <summary>
+    /// Держать страницу вверху, пока пользователь сам не прокрутит: после показа окна карточки
+    /// пересчитывают высоту текста, и без этого панель иногда «уезжает» вниз.
+    /// </summary>
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    public bool KeepAtTop { get; set; }
+
+    protected override void OnLayout(LayoutEventArgs levent)
+    {
+        base.OnLayout(levent);
+        if (KeepAtTop && AutoScrollPosition != Point.Empty) AutoScrollPosition = Point.Empty;
+    }
+
+    protected override void OnMouseWheel(MouseEventArgs e)
+    {
+        KeepAtTop = false;
+        base.OnMouseWheel(e);
+    }
+
+    protected override void OnScroll(ScrollEventArgs se)
+    {
+        KeepAtTop = false;
+        base.OnScroll(se);
+    }
 }
 
 /// <summary>Метка с переносом строк по ширине родителя.</summary>
@@ -170,9 +202,17 @@ internal sealed class ToggleSwitch : Control
         var track = new RectangleF(1, (Height - h) / 2f, w, h);
         using (var path = Theme.RoundRect(track, h / 2f))
         {
-            var color = _checked ? (_hover ? Theme.AccentHover : Theme.Accent) : (_hover ? Color.FromArgb(70, 76, 90) : Color.FromArgb(56, 62, 75));
-            using var brush = new SolidBrush(Enabled ? color : Color.FromArgb(45, 48, 56));
-            g.FillPath(brush, path);
+            if (_checked && Enabled)
+            {
+                using var brush = Theme.AccentBrush(track, lighter: _hover);
+                g.FillPath(brush, path);
+            }
+            else
+            {
+                var color = !Enabled ? Color.FromArgb(40, 34, 48) : _hover ? Color.FromArgb(68, 56, 80) : Color.FromArgb(52, 43, 62);
+                using var brush = new SolidBrush(color);
+                g.FillPath(brush, path);
+            }
             if (Focused)
             {
                 using var pen = new Pen(Color.FromArgb(120, 255, 255, 255), 1);
@@ -247,8 +287,8 @@ internal sealed class FlatButton : Control
         {
             ButtonKind.Primary => (Theme.Accent, Color.White, Color.Empty),
             ButtonKind.Discord => (Theme.Blurple, Color.White, Color.Empty),
-            ButtonKind.Danger => (Color.FromArgb(60, 30, 32), Color.FromArgb(255, 150, 150), Color.FromArgb(110, 50, 54)),
-            _ => (Color.FromArgb(38, 43, 54), Theme.Text, Color.FromArgb(56, 62, 76)),
+            ButtonKind.Danger => (Color.FromArgb(62, 24, 36), Color.FromArgb(255, 150, 160), Color.FromArgb(120, 44, 64)),
+            _ => (Color.FromArgb(38, 31, 48), Theme.Text, Color.FromArgb(66, 54, 78)),
         };
         if (!Enabled)
         {
@@ -261,7 +301,24 @@ internal sealed class FlatButton : Control
 
         var r = new RectangleF(0.5f, 0.5f, Width - 1.5f, Height - 1.5f);
         using var path = Theme.RoundRect(r, 7 * DeviceDpi / 96f);
-        using (var brush = new SolidBrush(bg)) g.FillPath(brush, path);
+        if (Enabled && Kind is ButtonKind.Primary or ButtonKind.Discord)
+        {
+            var (a, b) = Kind == ButtonKind.Primary
+                ? (Theme.AccentA, Theme.AccentB)
+                : (Color.FromArgb(88, 101, 242), Color.FromArgb(128, 92, 255));
+            if (_hover && !_pressed) (a, b) = (ControlPaint.Light(a, 0.2f), ControlPaint.Light(b, 0.2f));
+            if (_pressed) (a, b) = (ControlPaint.Dark(a, 0.05f), ControlPaint.Dark(b, 0.05f));
+            using var grad = new LinearGradientBrush(r, a, b, LinearGradientMode.Horizontal);
+            g.FillPath(grad, path);
+            // лёгкий блик сверху
+            using var shine = new LinearGradientBrush(r, Color.FromArgb(45, 255, 255, 255), Color.FromArgb(0, 255, 255, 255), LinearGradientMode.Vertical);
+            g.FillPath(shine, path);
+        }
+        else
+        {
+            using var brush = new SolidBrush(bg);
+            g.FillPath(brush, path);
+        }
         if (border != Color.Empty)
         {
             using var pen = new Pen(border);
@@ -366,23 +423,29 @@ internal sealed class NavButton : Control
         Theme.HighQuality(g);
         var s = DeviceDpi / 96f;
         var r = new RectangleF(10 * s, 3 * s, Width - 20 * s, Height - 6 * s);
-        if (_selected || _hover)
-        {
-            using var path = Theme.RoundRect(r, 8 * s);
-            using var brush = new SolidBrush(_selected ? Color.FromArgb(44, 50, 63) : Theme.Hover);
-            g.FillPath(brush, path);
-        }
         if (_selected)
         {
-            using var accent = new SolidBrush(Theme.Accent);
-            using var bar = Theme.RoundRect(new RectangleF(10 * s, Height / 2f - 9 * s, 3 * s, 18 * s), 1.5f * s);
-            g.FillPath(accent, bar);
+            using var path = Theme.RoundRect(r, 9 * s);
+            using var brush = Theme.AccentBrush(r, alpha: 70);
+            g.FillPath(brush, path);
+            using var edge = new Pen(Color.FromArgb(90, Theme.AccentA), 1);
+            g.DrawPath(edge, path);
+            var barRect = new RectangleF(10 * s, Height / 2f - 10 * s, 3 * s, 20 * s);
+            using var bar = Theme.RoundRect(barRect, 1.5f * s);
+            using var barBrush = new LinearGradientBrush(barRect, Theme.Gold, Theme.AccentA, LinearGradientMode.Vertical);
+            g.FillPath(barBrush, bar);
+        }
+        else if (_hover)
+        {
+            using var path = Theme.RoundRect(r, 9 * s);
+            using var brush = new SolidBrush(Theme.Hover);
+            g.FillPath(brush, path);
         }
         using var glyphFont = new Font("Segoe Fluent Icons", 11f);
         using var fallbackGlyph = new Font("Segoe MDL2 Assets", 11f);
         var gf = glyphFont.Name == "Segoe Fluent Icons" ? glyphFont : fallbackGlyph;
         var color = _selected ? Theme.Text : Theme.Muted;
-        TextRenderer.DrawText(g, Glyph, gf, new Rectangle((int)(24 * s), 0, (int)(24 * s), Height), color, TextFormatFlags.VerticalCenter | TextFormatFlags.HorizontalCenter);
+        TextRenderer.DrawText(g, Glyph, gf, new Rectangle((int)(24 * s), 0, (int)(24 * s), Height), _selected ? Theme.Gold : color, TextFormatFlags.VerticalCenter | TextFormatFlags.HorizontalCenter);
         TextRenderer.DrawText(g, Text, Font, new Rectangle((int)(56 * s), 0, Width - (int)(60 * s), Height), color, TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
     }
 }

@@ -32,6 +32,9 @@ internal sealed class AppSettings
 
     public bool TrayHintShown { get; set; }
 
+    /// <summary>От игры уже приходили данные GSI — интеграция настроена и работает.</summary>
+    public bool GsiConfirmed { get; set; }
+
     /// <summary>Проверять наличие новой версии на GitHub (раз в 12 часов) и напоминать о ней.</summary>
     public bool CheckUpdates { get; set; } = true;
 

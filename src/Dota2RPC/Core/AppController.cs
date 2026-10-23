@@ -22,7 +22,7 @@ internal sealed record AppStatus(
 /// <summary>Связывает GSI, наблюдение за процессом, построитель статуса и Discord.</summary>
 internal sealed class AppController : IDisposable
 {
-    // Dota присылает heartbeat раз в 30 с; если данных нет дольше — считаем их устаревшими.
+    // Для индикатора «данные поступают» в окне: пакет моложе этого считается свежим.
     static readonly TimeSpan GsiStaleAfter = TimeSpan.FromSeconds(75);
 
     readonly object _gate = new();
@@ -138,6 +138,12 @@ internal sealed class AppController : IDisposable
         }
         var settings = Settings;
         if (settings.RecordGsiSamples) GsiRecorder.Save(snapshot);
+        if (!settings.GsiConfirmed)
+        {
+            // Первый пакет от игры: дальше тишина при запущенной Dota трактуется как главное меню.
+            try { UpdateSettings(s => s.GsiConfirmed = true); } catch (Exception ex) { Log.Error("Не удалось сохранить признак GSI", ex); }
+            Log.Info("GSI: получены первые данные от игры — интеграция подтверждена");
+        }
         Recompute();
     }
 
@@ -182,12 +188,13 @@ internal sealed class AppController : IDisposable
                 settings = _settings;
             }
             var now = DateTime.UtcNow;
-            var fresh = snapshot is not null && now - snapshot.ReceivedUtc < GsiStaleAfter;
 
+            // Последний пакет остаётся актуальным, пока игра запущена: Dota молчит в меню и на паузе,
+            // а данные прошлого запуска сбрасываются при закрытии игры (OnDotaChanged).
             PresenceActivity? activity;
             lock (_buildGate)
             {
-                activity = _builder.Build(new PresenceInput(fresh ? snapshot : null, _dota.IsRunning, _dota.StartedUtc, now, settings));
+                activity = _builder.Build(new PresenceInput(snapshot, _dota.IsRunning, _dota.StartedUtc, now, settings, settings.GsiConfirmed));
             }
 
             lock (_gate) _activity = activity;

@@ -20,7 +20,7 @@ internal static class AppInfo
     public static string DotaLogoUrl => DotaLogo.Url;
     public const string HeroListUrl = "https://www.dota2.com/datafeed/herolist?language=english";
     public const string DiscordAppInfoUrl = "https://discord.com/api/v10/applications/{0}/rpc";
-    public const string OpenDotaPlayerUrl = "https://www.opendota.com/players/{0}";
+    public const string DotabuffPlayerUrl = "https://www.dotabuff.com/players/{0}";
 
     public static string Version =>
         typeof(AppInfo).Assembly.GetName().Version?.ToString(3) ?? "1.0.0";

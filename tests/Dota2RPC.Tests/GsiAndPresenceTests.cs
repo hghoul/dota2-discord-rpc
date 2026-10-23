@@ -67,7 +67,8 @@ public class GsiAndPresenceTests
         Assert.Null(a.StartUnix);
         Assert.Equal("Pudge · LH/DN 182/9 · GPM 545 · XPM 610", a.LargeText);
         var button = Assert.Single(a.Buttons);
-        Assert.Equal("https://www.opendota.com/players/39734273", button.Url);
+        Assert.Equal("https://www.dotabuff.com/players/39734273", button.Url);
+        Assert.Equal("Профиль на Dotabuff", button.Label);
     }
 
     [Fact]
@@ -215,6 +216,22 @@ public class GsiAndPresenceTests
 
         var colorful = Build(s, TestEnv.Settings(o => o.ShowEmoji = true))!;
         Assert.Equal("🧪 Пробует героя", colorful.Details);
+    }
+
+    [Fact]
+    public void Silent_game_after_confirmed_gsi_means_main_menu()
+    {
+        var settings = TestEnv.Settings();
+        PresenceActivity? At(TimeSpan sinceLaunch, bool confirmed) =>
+            new PresenceBuilder(_heroes).Build(new PresenceInput(null, true, Now - sinceLaunch, Now, settings, confirmed));
+
+        Assert.Equal("Dota 2 запускается", At(TimeSpan.FromSeconds(5), confirmed: true)!.Details);
+        Assert.Equal("В главном меню", At(TimeSpan.FromMinutes(2), confirmed: true)!.Details);
+        // Интеграция ни разу не присылала данных — честно пишем только, что игра запущена.
+        Assert.Equal("Dota 2 запущена", At(TimeSpan.FromMinutes(2), confirmed: false)!.Details);
+        // Показ статуса в меню выключен — статуса нет.
+        settings.ShowInMenu = false;
+        Assert.Null(At(TimeSpan.FromMinutes(2), confirmed: true));
     }
 
     [Fact]

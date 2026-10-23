@@ -5,16 +5,20 @@ namespace Dota2RPC.UI;
 
 internal static class Theme
 {
-    public static readonly Color Background = Color.FromArgb(15, 17, 21);
-    public static readonly Color Sidebar = Color.FromArgb(20, 23, 29);
-    public static readonly Color Card = Color.FromArgb(26, 30, 38);
-    public static readonly Color CardBorder = Color.FromArgb(40, 45, 56);
-    public static readonly Color Input = Color.FromArgb(14, 16, 21);
-    public static readonly Color Hover = Color.FromArgb(34, 39, 49);
-    public static readonly Color Text = Color.FromArgb(232, 234, 238);
-    public static readonly Color Muted = Color.FromArgb(142, 150, 164);
-    public static readonly Color Accent = Color.FromArgb(222, 70, 52);
-    public static readonly Color AccentHover = Color.FromArgb(240, 92, 72);
+    // Тема «тлеющие угли»: фиолетово-чёрный фон, огненно-малиновые градиенты и золото — в тон логотипу.
+    public static readonly Color Background = Color.FromArgb(13, 11, 18);
+    public static readonly Color Sidebar = Color.FromArgb(18, 14, 24);
+    public static readonly Color Card = Color.FromArgb(26, 21, 33);
+    public static readonly Color CardBorder = Color.FromArgb(48, 38, 58);
+    public static readonly Color Input = Color.FromArgb(14, 11, 19);
+    public static readonly Color Hover = Color.FromArgb(36, 29, 46);
+    public static readonly Color Text = Color.FromArgb(242, 236, 242);
+    public static readonly Color Muted = Color.FromArgb(160, 150, 170);
+    public static readonly Color Accent = Color.FromArgb(240, 86, 58);
+    public static readonly Color AccentHover = Color.FromArgb(255, 112, 80);
+    public static readonly Color AccentA = Color.FromArgb(255, 110, 60);   // начало градиента (угли)
+    public static readonly Color AccentB = Color.FromArgb(214, 38, 90);    // конец градиента (малиновый)
+    public static readonly Color Gold = Color.FromArgb(246, 200, 110);
     public static readonly Color Blurple = Color.FromArgb(88, 101, 242);
     public static readonly Color Green = Color.FromArgb(59, 165, 93);
     public static readonly Color Yellow = Color.FromArgb(240, 178, 50);
@@ -27,6 +31,15 @@ internal static class Theme
     public static readonly Color DiscordMuted = Color.FromArgb(181, 186, 193);
 
     public const string FontFamily = "Segoe UI";
+
+    /// <summary>Фирменный градиент слева направо; alpha — для полупрозрачных подсветок.</summary>
+    public static LinearGradientBrush AccentBrush(RectangleF r, int alpha = 255, bool lighter = false)
+    {
+        var rect = r.Width < 1 || r.Height < 1 ? new RectangleF(r.X, r.Y, Math.Max(1, r.Width), Math.Max(1, r.Height)) : r;
+        var a = lighter ? ControlPaint.Light(AccentA, 0.25f) : AccentA;
+        var b = lighter ? ControlPaint.Light(AccentB, 0.25f) : AccentB;
+        return new LinearGradientBrush(rect, Color.FromArgb(alpha, a), Color.FromArgb(alpha, b), LinearGradientMode.Horizontal);
+    }
 
     public static Font Font(float size, FontStyle style = FontStyle.Regular) => new(FontFamily, size, style);
 

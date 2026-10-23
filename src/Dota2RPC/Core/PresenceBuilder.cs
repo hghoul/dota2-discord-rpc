@@ -8,7 +8,8 @@ internal sealed record PresenceInput(
     bool DotaRunning,
     DateTime? DotaStartedUtc,
     DateTime NowUtc,
-    AppSettings Settings);
+    AppSettings Settings,
+    bool GsiConfirmed = false);
 
 /// <summary>
 /// Превращает реальное состояние игры в статус Discord. Если какое-то значение не пришло из GSI,
@@ -37,28 +38,21 @@ internal sealed class PresenceBuilder(HeroCatalog heroes)
 
         if (s is null || (!s.HasMap && !s.HasPlayer))
         {
-            // Dota запущена, но данных GSI нет (ещё грузится или не настроен параметр запуска).
+            // Данных от игры в этом запуске ещё не было. В главном меню Dota присылает пакеты GSI только
+            // при изменениях, поэтому тишина при уже проверенной интеграции означает главное меню.
+            // Первые секунды после старта процесса игра ещё загружается.
+            var startingUp = input.DotaStartedUtc is { } started && input.NowUtc - started < StartupGrace;
+            if (!startingUp && input.GsiConfirmed) return Menu(null, input.Settings, sessionStart);
             return new PresenceActivity
             {
-                Details = Ico(input.Settings, "🎮", "Dota 2 запущена"),
+                Details = Ico(input.Settings, "🎮", startingUp ? "Dota 2 запускается" : "Dota 2 запущена"),
                 LargeImage = AppInfo.DotaLogoUrl,
                 LargeText = "Dota 2",
                 StartUnix = sessionStart,
             };
         }
 
-        if (!s.InMatch)
-        {
-            if (!input.Settings.ShowInMenu) return null;
-            return new PresenceActivity
-            {
-                Details = Ico(input.Settings, "🏠", "В главном меню"),
-                LargeImage = AppInfo.DotaLogoUrl,
-                LargeText = "Dota 2",
-                StartUnix = sessionStart,
-                Buttons = ProfileButtons(s, input.Settings),
-            };
-        }
+        if (!s.InMatch) return Menu(s, input.Settings, sessionStart);
 
         // Часы матча отсчитываем от момента получения пакета, а не от «сейчас»: тогда начало таймера
         // не сдвигается между пакетами и Discord не получает лишних обновлений.
@@ -79,6 +73,22 @@ internal sealed class PresenceBuilder(HeroCatalog heroes)
             "CUSTOM_GAME_SETUP" => BuildLobby(s, "🛠️", "Настройка пользовательской игры", input.Settings),
             "DISCONNECT" => BuildLobby(s, "📡", "Отключение от матча", input.Settings),
             _ => BuildLobby(s, "⚔️", "В матче", input.Settings),
+        };
+    }
+
+    /// <summary>Сколько после запуска dota2.exe показывать «запускается», пока нет данных от игры.</summary>
+    internal static readonly TimeSpan StartupGrace = TimeSpan.FromSeconds(25);
+
+    PresenceActivity? Menu(GsiSnapshot? s, AppSettings o, long? sessionStart)
+    {
+        if (!o.ShowInMenu) return null;
+        return new PresenceActivity
+        {
+            Details = Ico(o, "🏠", "В главном меню"),
+            LargeImage = AppInfo.DotaLogoUrl,
+            LargeText = "Dota 2",
+            StartUnix = sessionStart,
+            Buttons = s is null ? [] : ProfileButtons(s, o),
         };
     }
 
@@ -265,7 +275,7 @@ internal sealed class PresenceBuilder(HeroCatalog heroes)
 
     static IReadOnlyList<PresenceButton> ProfileButtons(GsiSnapshot s, AppSettings o) =>
         o.ShowProfileButton && s.AccountId32 is { } id
-            ? [new PresenceButton("Профиль на OpenDota", string.Format(AppInfo.OpenDotaPlayerUrl, id))]
+            ? [new PresenceButton("Профиль на Dotabuff", string.Format(AppInfo.DotabuffPlayerUrl, id))]
             : [];
 
     long Anchor(string key, long desired)

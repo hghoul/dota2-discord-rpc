@@ -9,7 +9,7 @@ namespace Dota2RPC.UI;
 internal sealed class MainForm : Form
 {
     readonly AppController _app;
-    readonly Panel _content;
+    readonly ScrollPanel _content;
     readonly Label _pageTitle;
     readonly Label _pageSubtitle;
     readonly List<(NavButton Button, Control Page, string Title, string Subtitle)> _pages = [];
@@ -69,19 +69,33 @@ internal sealed class MainForm : Form
         MinimumSize = new Size(860, 560);
 
         // Боковая панель
-        var sidebar = new Panel { Dock = DockStyle.Left, Width = 230, BackColor = Theme.Sidebar, Padding = new Padding(0, 0, 0, 12) };
+        var sidebar = new Panel { Dock = DockStyle.Left, Width = 230, BackColor = Theme.Sidebar, Padding = new Padding(0, 0, 2, 12) };
+        // Огненная кромка справа от боковой панели
+        sidebar.Paint += (_, e) =>
+        {
+            var edge = new RectangleF(sidebar.Width - 2, 0, 2, sidebar.Height);
+            using var brush = new System.Drawing.Drawing2D.LinearGradientBrush(edge, Color.FromArgb(160, Theme.AccentA), Color.FromArgb(0, Theme.AccentB), System.Drawing.Drawing2D.LinearGradientMode.Vertical);
+            e.Graphics.FillRectangle(brush, edge);
+        };
         var brand = new Panel { Dock = DockStyle.Top, Height = 92, BackColor = Theme.Sidebar };
         var logo = new PictureBox
         {
-            Image = AppIcon.Bitmap(44),
+            Image = AppIcon.Bitmap(48),
             SizeMode = PictureBoxSizeMode.Zoom,
             Size = new Size(44, 44),
             Location = new Point(20, 24),
             BackColor = Theme.Sidebar,
         };
         brand.Controls.Add(logo);
-        brand.Controls.Add(new Label { Text = "Dota 2 RPC", Font = Theme.Font(13f, FontStyle.Bold), ForeColor = Theme.Text, AutoSize = true, Location = new Point(74, 24), BackColor = Theme.Sidebar });
-        brand.Controls.Add(new Label { Text = "Rich Presence · v" + AppInfo.Version, Font = Theme.Font(8.5f), ForeColor = Theme.Muted, AutoSize = true, Location = new Point(76, 50), BackColor = Theme.Sidebar });
+        brand.Controls.Add(new Label { Text = "Dota 2 RPC", Font = Theme.Font(13f, FontStyle.Bold), ForeColor = Theme.Text, AutoSize = true, Location = new Point(76, 24), BackColor = Theme.Sidebar });
+        brand.Controls.Add(new Label { Text = "Rich Presence · v" + AppInfo.Version, Font = Theme.Font(8.5f), ForeColor = Theme.Gold, AutoSize = true, Location = new Point(78, 50), BackColor = Theme.Sidebar });
+        // Тонкий разделитель под логотипом: от золота к прозрачному
+        brand.Paint += (_, e) =>
+        {
+            var line = new RectangleF(20, brand.Height - 2, brand.Width - 40, 1);
+            using var brush = new System.Drawing.Drawing2D.LinearGradientBrush(line, Color.FromArgb(120, Theme.Gold), Color.FromArgb(0, Theme.Gold), System.Drawing.Drawing2D.LinearGradientMode.Horizontal);
+            e.Graphics.FillRectangle(brush, line);
+        };
 
         var footer = new Panel { Dock = DockStyle.Bottom, Height = 56, BackColor = Theme.Sidebar, Padding = new Padding(22, 8, 12, 8) };
         _sidebarDot = new Panel { Size = new Size(10, 10), Location = new Point(24, 22), BackColor = Theme.Gray };
@@ -103,7 +117,17 @@ internal sealed class MainForm : Form
 
         // Область содержимого
         var main = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Background, Padding = new Padding(28, 22, 28, 0) };
-        var header = new Panel { Dock = DockStyle.Top, Height = 70, BackColor = Theme.Background };
+        var header = new Panel { Dock = DockStyle.Top, Height = 74, BackColor = Theme.Background };
+        // Огненное подчёркивание заголовка страницы
+        header.Paint += (_, e) =>
+        {
+            var s = header.DeviceDpi / 96f;
+            var bar = new RectangleF(2, 66 * s, 64 * s, 3 * s);
+            using var path = Theme.RoundRect(bar, 1.5f * s);
+            using var brush = Theme.AccentBrush(bar);
+            e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            e.Graphics.FillPath(brush, path);
+        };
         _pageTitle = new Label { Font = Theme.Font(18f, FontStyle.Bold), ForeColor = Theme.Text, AutoSize = true, Location = new Point(0, 0) };
         _pageSubtitle = new Label { Font = Theme.Font(9.5f), ForeColor = Theme.Muted, AutoSize = true, Location = new Point(2, 40) };
         header.Controls.Add(_pageTitle);
@@ -215,6 +239,7 @@ internal sealed class MainForm : Form
 
     void ScrollToTop()
     {
+        _content.KeepAtTop = true;
         _content.AutoScrollPosition = Point.Empty;
         // После раскладки страницы (и переключения режима разработчика) панель может «уехать» вниз —
         // повторяем сброс, когда раскладка уже завершена.
@@ -438,7 +463,7 @@ internal sealed class MainForm : Form
         display.Add(Ui.ToggleRow("Сторона и счёт", "В подсказке к иконке героя: «Силы Света · Счёт 21 : 14».", _tScore));
         display.Add(Ui.ToggleRow("LH/DN, GPM, XPM", "Расширенная статистика в подсказке к иконке героя.", _tNet));
         display.Add(Ui.ToggleRow("Статус в главном меню", "Показывать «В главном меню», когда вы не в матче.", _tMenu));
-        display.Add(Ui.ToggleRow("Кнопка «Профиль на OpenDota»", "Кнопка в статусе со ссылкой на ваш профиль (видна другим пользователям, не вам).", _tButton));
+        display.Add(Ui.ToggleRow("Кнопка «Профиль на Dotabuff»", "Кнопка в статусе со ссылкой на ваш профиль Dotabuff (видна другим пользователям, не вам).", _tButton));
 
         foreach (var (toggle, apply) in new (ToggleSwitch, Action<AppSettings, bool>)[]
                  {
@@ -885,6 +910,8 @@ internal sealed class MainForm : Form
             _stGsi.Set(Theme.Red, "Сервер не запущен", st.GsiError);
         else if (st.SnapshotFresh && st.LastGsiUtc is { } last)
             _stGsi.Set(Theme.Green, "Данные поступают", $"Последний пакет {Math.Max(0, (int)(DateTime.UtcNow - last).TotalSeconds)} с назад · порт {st.GsiPort}");
+        else if (st.DotaRunning && settings.GsiConfirmed)
+            _stGsi.Set(Theme.Green, "Подключено", "В главном меню игра присылает данные только при изменениях");
         else if (st.DotaRunning)
             _stGsi.Set(Theme.Yellow, "Нет данных от игры", $"Проверьте конфигурацию и параметр {AppInfo.LaunchOption}, затем перезапустите Dota 2");
         else
@@ -955,7 +982,7 @@ internal sealed class MainForm : Form
         _preview.SetActivity(st.Activity, emptyText, emptyHint);
 
         // Текущий матч
-        var s = st.SnapshotFresh ? st.Snapshot : null;
+        var s = st.DotaRunning ? st.Snapshot : null;
         var inMatch = s is { InMatch: true, IsSpectating: false };
         SetMatch("Герой", inMatch && s!.HasHero ? _app.Heroes.DisplayName(s.HeroName!) : "—");
         SetMatch("Уровень", inMatch && s!.HeroLevel is > 0 ? s.HeroLevel.ToString()! : "—");

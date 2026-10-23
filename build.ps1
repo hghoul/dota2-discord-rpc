@@ -11,7 +11,7 @@ param(
     [switch]$SkipTests,
     [switch]$UpdateHeroes,
     [string]$ClientId,
-    [string]$Version = '1.1.0'
+    [string]$Version = '1.2.0'
 )
 
 $ErrorActionPreference = 'Stop'
